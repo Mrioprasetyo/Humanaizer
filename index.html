@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Humanizer — Strip the AI Out</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #1a1a18;
+    --ink-muted: #5a5a55;
+    --ink-faint: #9a9a92;
+    --paper: #f5f3ee;
+    --paper-warm: #ede9e0;
+    --paper-dark: #e0dbd0;
+    --accent: #c84b2f;
+    --accent-light: #f5ede9;
+    --accent-mid: #e8a090;
+    --green: #2d6a4f;
+    --green-light: #e8f4ee;
+    --border: rgba(26,26,24,0.12);
+    --border-mid: rgba(26,26,24,0.22);
+  }
+
+  body {
+    font-family: 'Instrument Sans', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── HEADER ─────────────────────────────────── */
+  header {
+    border-bottom: 1px solid var(--border-mid);
+    padding: 1.5rem 2rem;
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    background: var(--paper);
+  }
+
+  .logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.75rem;
+    letter-spacing: -0.5px;
+    color: var(--ink);
+  }
+
+  .logo span {
+    color: var(--accent);
+    font-style: italic;
+  }
+
+  .tagline {
+    font-size: 0.8rem;
+    color: var(--ink-muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  /* ── MAIN ───────────────────────────────────── */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto 1fr auto;
+    gap: 0;
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 2rem;
+    gap: 1.5rem;
+  }
+
+  .controls-bar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .mode-tabs {
+    display: flex;
+    background: var(--paper-dark);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+  }
+
+  .mode-tab {
+    padding: 0.4rem 1rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--ink-muted);
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+
+  .mode-tab.active {
+    background: var(--paper);
+    color: var(--ink);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+
+  .btn-humanize {
+    margin-left: auto;
+    padding: 0.6rem 1.8rem;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .btn-humanize:hover:not(:disabled) {
+    background: #b03d23;
+    transform: translateY(-1px);
+  }
+
+  .btn-humanize:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-humanize .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+
+  .btn-humanize.loading .spinner { display: block; }
+  .btn-humanize.loading .btn-label { display: none; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── PANELS ─────────────────────────────────── */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .panel-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .panel-label .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--ink-faint);
+  }
+
+  .panel-label .dot.red { background: var(--accent); }
+  .panel-label .dot.green { background: var(--green); }
+
+  .textarea-wrap {
+    position: relative;
+    flex: 1;
+  }
+
+  textarea {
+    width: 100%;
+    height: 320px;
+    padding: 1.25rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.82rem;
+    line-height: 1.7;
+    background: var(--paper);
+    border: 1px solid var(--border-mid);
+    border-radius: 10px;
+    color: var(--ink);
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  textarea:focus {
+    border-color: var(--accent-mid);
+    box-shadow: 0 0 0 3px rgba(200,75,47,0.08);
+  }
+
+  textarea::placeholder { color: var(--ink-faint); }
+
+  .char-count {
+    position: absolute;
+    bottom: 10px;
+    right: 12px;
+    font-size: 0.7rem;
+    color: var(--ink-faint);
+    font-family: 'DM Mono', monospace;
+    pointer-events: none;
+  }
+
+  /* ── OUTPUT PANEL ───────────────────────────── */
+  .output-box {
+    min-height: 320px;
+    padding: 1.25rem;
+    background: var(--green-light);
+    border: 1px solid rgba(45,106,79,0.2);
+    border-radius: 10px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.82rem;
+    line-height: 1.7;
+    color: var(--ink);
+    white-space: pre-wrap;
+    word-break: break-word;
+    position: relative;
+  }
+
+  .output-placeholder {
+    color: var(--ink-faint);
+    font-style: italic;
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 0.85rem;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    width: 80%;
+  }
+
+  .output-placeholder svg { display: block; margin: 0 auto 0.75rem; }
+
+  /* ── AUDIT SECTION ──────────────────────────── */
+  .full-width {
+    grid-column: 1 / -1;
+  }
+
+  .audit-panel {
+    background: var(--paper-warm);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .audit-header {
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+
+  .audit-body {
+    padding: 1rem 1.25rem;
+    font-size: 0.83rem;
+    line-height: 1.8;
+    color: var(--ink);
+    display: none;
+  }
+
+  .audit-body.visible { display: block; }
+
+  .audit-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--accent-light);
+    color: var(--accent);
+    border-radius: 5px;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.73rem;
+    font-weight: 600;
+    margin: 0.1rem 0.2rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .changes-list {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+  }
+
+  /* ── COPY BUTTON ─────────────────────────────── */
+  .btn-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.9rem;
+    border: 1px solid rgba(45,106,79,0.35);
+    background: white;
+    color: var(--green);
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+    display: none;
+  }
+
+  .btn-copy:hover { background: var(--green-light); }
+  .btn-copy.visible { display: inline-flex; }
+
+  /* ── DIFF MODE ───────────────────────────────── */
+  .diff-view mark {
+    background: #fff3cd;
+    border-radius: 2px;
+    padding: 0 2px;
+  }
+
+  .diff-view del {
+    background: #fde8e8;
+    color: var(--accent);
+    text-decoration: line-through;
+    border-radius: 2px;
+    padding: 0 2px;
+  }
+
+  .diff-view ins {
+    background: var(--green-light);
+    color: var(--green);
+    text-decoration: none;
+    border-radius: 2px;
+    padding: 0 2px;
+  }
+
+  /* ── STATS ───────────────────────────────────── */
+  .stats-row {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 1rem;
+    display: none;
+  }
+
+  .stats-row.visible { display: flex; }
+
+  .stat-card {
+    flex: 1;
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+  }
+
+  .stat-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 0.3rem;
+  }
+
+  .stat-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.8rem;
+    color: var(--ink);
+  }
+
+  .stat-value.green { color: var(--green); }
+  .stat-value.red { color: var(--accent); }
+
+  /* ── LOADING SHIMMER ─────────────────────────── */
+  @keyframes shimmer {
+    0% { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+  }
+
+  .shimmer {
+    background: linear-gradient(90deg, var(--green-light) 25%, rgba(255,255,255,0.6) 50%, var(--green-light) 75%);
+    background-size: 400px 100%;
+    animation: shimmer 1.4s infinite;
+    min-height: 20px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+  }
+
+  /* ── RESPONSIVE ───────────────────────────────── */
+  @media (max-width: 700px) {
+    main { grid-template-columns: 1fr; padding: 1rem; }
+    .controls-bar { flex-direction: column; align-items: stretch; }
+    .btn-humanize { width: 100%; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">human<span>izer</span></div>
+  <div class="tagline">Strip the AI out of your text</div>
+</header>
+
+<main>
+  <!-- Controls -->
+  <div class="controls-bar">
+    <div class="mode-tabs">
+      <button class="mode-tab active" data-mode="final">Final version</button>
+      <button class="mode-tab" data-mode="audit">Audit trail</button>
+    </div>
+    <button class="btn-copy" id="copyBtn" onclick="copyOutput()">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M3 11V3a2 2 0 0 1 2-2h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Copy
+    </button>
+    <button class="btn-humanize" id="humanizeBtn" onclick="humanize()">
+      <span class="spinner"></span>
+      <span class="btn-label">Humanize →</span>
+    </button>
+  </div>
+
+  <!-- Input Panel -->
+  <div class="panel">
+    <div class="panel-label">
+      <span class="dot red"></span>
+      AI-sounding text
+    </div>
+    <div class="textarea-wrap">
+      <textarea id="inputText" placeholder="Paste your AI-generated text here...
+
+e.g. 'In today's rapidly evolving technological landscape, this groundbreaking approach serves as a testament to innovation, underscoring the pivotal role of AI in shaping the future...'" oninput="updateCharCount()"></textarea>
+      <span class="char-count" id="charCount">0 chars</span>
+    </div>
+  </div>
+
+  <!-- Output Panel -->
+  <div class="panel">
+    <div class="panel-label">
+      <span class="dot green"></span>
+      Humanized output
+    </div>
+    <div class="output-box" id="outputBox">
+      <div class="output-placeholder" id="outputPlaceholder">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="14" stroke="#c0bdb5" stroke-width="1.5"/>
+          <path d="M10 16 C10 12, 22 12, 22 16 C22 20, 10 20, 10 16" stroke="#c0bdb5" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+          <circle cx="12" cy="13" r="1.5" fill="#c0bdb5"/>
+          <circle cx="20" cy="13" r="1.5" fill="#c0bdb5"/>
+        </svg>
+        Your humanized text will appear here
+      </div>
+      <div id="outputContent" style="display:none;"></div>
+      <div id="loadingShimmer" style="display:none;">
+        <div class="shimmer" style="width:92%; height:14px;"></div>
+        <div class="shimmer" style="width:78%; height:14px;"></div>
+        <div class="shimmer" style="width:85%; height:14px;"></div>
+        <div class="shimmer" style="width:60%; height:14px;"></div>
+        <div class="shimmer" style="width:88%; height:14px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Row -->
+  <div class="stats-row" id="statsRow">
+    <div class="stat-card">
+      <div class="stat-label">Words removed/changed</div>
+      <div class="stat-value red" id="statRemoved">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">AI patterns caught</div>
+      <div class="stat-value" id="statPatterns">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Readability score (est.)</div>
+      <div class="stat-value green" id="statReadability">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Human confidence</div>
+      <div class="stat-value green" id="statConfidence">—</div>
+    </div>
+  </div>
+
+  <!-- Audit Panel -->
+  <div class="full-width" id="auditSection" style="display:none;">
+    <div class="audit-panel">
+      <div class="audit-header">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1L1 14h14L8 1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 6v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="12" r="0.8" fill="currentColor"/></svg>
+        Audit trail — what was wrong
+      </div>
+      <div class="audit-body visible" id="auditBody">
+        <em style="color:var(--ink-faint); font-size:0.82rem;">Run the humanizer to see a breakdown of AI patterns detected...</em>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const SYSTEM_PROMPT = `You are an expert editor who removes AI writing patterns and makes text sound natural and human.
+
+When given text, you will:
+1. Identify and remove all AI writing patterns
+2. Rewrite it to sound genuinely human - with personality, varied rhythm, and specificity
+3. Provide a brief audit of what you found
+
+STRICT RULES:
+- No "serves as", "stands as", "functions as" — use is/are instead
+- No significance inflation: "pivotal", "transformative", "groundbreaking", "testament", "underscores"
+- No promotional adjectives: "vibrant", "breathtaking", "stunning", "renowned", "nestled"
+- No vague attributions: "experts say", "industry observers", "some critics argue"
+- No -ing tacked-on phrases: "...highlighting the importance of...", "...reflecting the community's..."
+- No rule-of-three: "X, Y, and Z" patterns used for fake depth
+- No em dash overuse
+- No chatbot filler: "Great question!", "I hope this helps!", "Let me know if..."
+- No generic conclusions: "the future looks bright", "exciting times lie ahead"
+- No excessive hedging: "could potentially possibly be argued"
+- Add real voice: opinions, varied sentence length, first person where appropriate, specific details
+
+Respond ONLY with valid JSON (no markdown, no backticks):
+{
+  "humanized": "The humanized text here",
+  "audit_flags": ["pattern 1 found", "pattern 2 found", "..."],
+  "patterns_caught": 7,
+  "confidence": "87%",
+  "readability": "B+"
+}`;
+
+let currentMode = 'final';
+let lastOutput = '';
+
+document.querySelectorAll('.mode-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    currentMode = tab.dataset.mode;
+    if (currentMode === 'audit') {
+      document.getElementById('auditSection').style.display = 'block';
+    } else {
+      document.getElementById('auditSection').style.display = 'none';
+    }
+  });
+});
+
+function updateCharCount() {
+  const len = document.getElementById('inputText').value.length;
+  document.getElementById('charCount').textContent = len.toLocaleString() + ' chars';
+}
+
+function showLoading(on) {
+  const btn = document.getElementById('humanizeBtn');
+  btn.disabled = on;
+  btn.classList.toggle('loading', on);
+  document.getElementById('loadingShimmer').style.display = on ? 'block' : 'none';
+  document.getElementById('outputPlaceholder').style.display = on ? 'none' : '';
+}
+
+async function humanize() {
+  const inputText = document.getElementById('inputText').value.trim();
+  if (!inputText) {
+    alert('Please paste some text to humanize!');
+    return;
+  }
+
+  showLoading(true);
+  document.getElementById('outputContent').style.display = 'none';
+  document.getElementById('outputPlaceholder').style.display = 'none';
+  document.getElementById('statsRow').classList.remove('visible');
+  document.getElementById('copyBtn').classList.remove('visible');
+  document.getElementById('auditBody').innerHTML = '<em style="color:var(--ink-faint); font-size:0.82rem;">Analysing...</em>';
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: inputText }]
+      })
+    });
+
+    const data = await response.json();
+    const rawText = data.content?.map(b => b.text || '').join('') || '';
+
+    let parsed;
+    try {
+      const cleaned = rawText.replace(/```json|```/g, '').trim();
+      parsed = JSON.parse(cleaned);
+    } catch(e) {
+      parsed = { humanized: rawText, audit_flags: [], patterns_caught: '?', confidence: '?', readability: '?' };
+    }
+
+    lastOutput = parsed.humanized || '';
+
+    // Show output
+    const contentEl = document.getElementById('outputContent');
+    contentEl.textContent = lastOutput;
+    contentEl.style.display = 'block';
+    document.getElementById('loadingShimmer').style.display = 'none';
+
+    // Stats
+    const origWords = inputText.split(/\s+/).length;
+    const newWords = lastOutput.split(/\s+/).length;
+    const changed = Math.abs(origWords - newWords);
+    document.getElementById('statRemoved').textContent = changed;
+    document.getElementById('statPatterns').textContent = parsed.patterns_caught || '—';
+    document.getElementById('statReadability').textContent = parsed.readability || '—';
+    document.getElementById('statConfidence').textContent = parsed.confidence || '—';
+    document.getElementById('statsRow').classList.add('visible');
+
+    // Audit
+    const flags = parsed.audit_flags || [];
+    if (flags.length > 0) {
+      document.getElementById('auditBody').innerHTML =
+        `<p style="margin-bottom:0.75rem; font-size:0.83rem; color:var(--ink-muted);">Found <strong>${flags.length}</strong> AI patterns in your text:</p>` +
+        `<ul class="changes-list">${flags.map(f => `<li><span class="audit-flag">→ ${f}</span></li>`).join('')}</ul>`;
+    } else {
+      document.getElementById('auditBody').innerHTML = '<em style="color:var(--green);">No major AI patterns detected — text was already fairly natural.</em>';
+    }
+
+    if (currentMode === 'audit') {
+      document.getElementById('auditSection').style.display = 'block';
+    }
+
+    document.getElementById('copyBtn').classList.add('visible');
+
+  } catch(err) {
+    document.getElementById('outputContent').textContent = 'Something went wrong: ' + err.message;
+    document.getElementById('outputContent').style.display = 'block';
+    document.getElementById('loadingShimmer').style.display = 'none';
+    document.getElementById('outputPlaceholder').style.display = 'none';
+  } finally {
+    showLoading(false);
+  }
+}
+
+function copyOutput() {
+  if (!lastOutput) return;
+  navigator.clipboard.writeText(lastOutput).then(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="9" height="9" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M3 11V3a2 2 0 0 1 2-2h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Copy'; }, 1800);
+  });
+}
+</script>
+</body>
+</html>
